@@ -1,0 +1,290 @@
+ImageShow1.0 (beta5.x)
+by YNOP
+
+Ok Here we go, Beta5.x.  Most everything I originaly wanted if now finished.  It's a verry useable image view now. It can save all Translator types, Set the current Image as the Desktop Image(streched,centered,tilled). Display the image in a variaty of veiwing modes, it accepts refs from double clicking on a file and drag and drop. It's even a little faster than other image views, And its verry stable.  I am a poor student here Adopt-a-App, Send money.
+
+Oh ya .. and if you think that there is just some feature that ImageView should have .. let me know.  I am open to anything.
+
+All splash images were done by ynop useing ArtPaint - a wonderful BeOS art program.
+
+Try finding that hiden about box :)
+
+Thanks goes out to lots of people.  Big thanks to Dragfly for fixing a big problem and another big thanks to G_McLeod for all his feedback and sugestions. Thanks to Chris Corona for the hundred emails he sent me with bugs and fixes and all kinds of good stuff.
+
+Up and coming Bugs - I mean Features:
+	multiple images at once
+	Bind DEL key to del// G_M
+	More stuff in get image info (hight width res size)// G_M
+	When loading file from ref, jump to that item in list //G_M
+	Speed up dir listing // G_M
+	Font support? // Thanks G_McLeod for some Ideas
+	TimeStamp - image loading time.
+	?Thread the ImageWindow so it does not lag on scroll through list
+	Total rewite of ImageShower. using threads.
+	SlideShow or ShowSlide :)
+	Add Random to slidshow
+	Am adding in cache engine. Make viewing images in row Fast!!
+	Support ArtPaint Plugins .. What!!!??? (Should I do this?)
+	Dose anyone want Zoom? does anyone use it?
+	Directroy history
+	Detachable Tracker Window ! Like ElectronicEyes.
+	Add Thumbnails to file Attribute.
+	Check if dir exist befor going to it.
+	Open Tracker window at this location
+	TreeView
+	Grab Screen Shot
+	If a directory is droped we should load that dir
+	Fix link resolve problem
+	Image info and file info need to be differant
+	-mini icon (11 x 16 px)
+	-large icon (23 x 32 px)
+	-thumbnail (69 x 96 px)
+	Correct aspect of thumbnails // Chris Corona
+	Anything YOU want here
+
+Ver 1.0 Beta 5.1:
+	Corrected small problem with drawing thumbnail 1 px too big
+	Fixed bug with NULL image when you dont have proper resources or bad png tranlator
+	Now draw "image is NULL" warning on screen instead of transparent with desktop ..
+	Fixed Translator Config settings panel. 
+	Some configs tryed getViewColor on a BWindow. I added a BView so that worked.
+	Mode now stays the same when going to full screen mode
+	Fixed bug with keeping the right draw mode when quiting after fullscreen mode
+	Implemented a Verry lame ShowSlide (slide show for some)
+	Increased app launch time by putting FilterMenu builder in a Thread .. smart me
+	Put Wonderfull little check marks by the menu items - makes thinks realy nice looking
+	PageUp/Down now jumps up and down pages.
+	Home/End go to the begining of the list or the end of the list
+	The "H" key now jumps to the home directory.
+	Now you can drop directorys on it and it will list them (dorp files is been in there a while)
+Ver 1.0 Beta 5.0:
+	Big 5.0
+	Fixed big big stuff in the ListItems.
+	Thumbs work Much better now.
+	Does not eat memory on thumbs now :)
+	Ok we added new filters. 
+	We have a mask filter, the basics .. should be finished soon
+	Fixed Brighten up pritty good. Small bug still though
+	Now we read the "Standard" Thumbnails from file attributs (GRAFX:Thumbnail)
+	Did major work on the filter stuff. Redid some of the arch stuff too
+	Made up a spiffy MyFilter example for users to play with.
+	Also added some source code in there that does some nice stuff
+	Worked on a StatusBar for filters but not finished yet.
+	Fixed bug in Mask filter that was cuting it off half way on some images
+	Added Half/Double Image Size filter. Works pritty good
+	The Icons are now the "real" icons that the system uses - instead of genaric.
+	Also SplitPane got lots or work done on it. its realy nice now. Look for it on BeBits too
+Ver 1.0 Beta 4.9:
+	Started Big work on a Tree view of the file list (not finished any time soon)
+	Fixed spaceding bug when DirFileitem was added to a OutlineLise. 
+	After big mess we fixed up some stuff.
+	We now save all the color settings and all kinds of stuff.
+	It is not the cleanest implimentstion but it does work.
+	Went though and trimed down some extra code
+	Also fixed a bug with only saveing color if changed.
+Ver 1.0 Beta 4.8:
+	Finised app coloring .We now can accept color anywhere.
+	Although the color is not saved yet it is just put onto the views
+	That was a lot of work .. I am gona take a nap now.
+Ver 1.0 Beta 4.7:
+	Did a lot of work on addon (mostly brighten)
+	Added bug fixes
+	Started work on Color awarness.
+	Gotten lots of user input. Looks good
+	Need to work on tumbnails and slideshow
+Ver 1.0 Beta 4.6:
+	Moved FlipH/V and Rotate CW/CCW to Filter.
+	Spiffed up the addon arch. 
+	Need to redo addons so that we can pass Mouse events
+	Fixed those little corners of scroll boxes .. pritty now 
+Ver 1.0 Beta 4.5.1:
+	Malloc_debug = true is your friend (use it)
+	I fixed up lots of little bugs that were in the code.
+	A few people had problems with the app. This should fix it.
+	Also cleaned up a lot of extra code and old coments.
+Ver 1.0 Beta 4.5:
+	We now catch Add/Remove/Delet/Rename/Move entry in directorys we list
+	This is a verry Beta part of the app.
+	It mostly works. Not always - I need to put in lots more error checking
+	Most people woun't even notice its in there. So thats kewl (little things count)
+Ver 1.0 Beta 4.4:
+	Added in code for entry changed on disk.	
+	If a file or dir is added to the directory we are in We auto update the dir
+	We DO NOT reload the whole directroy. We just add in the new entry.
+	This is done with our watch_directroy code.
+Ver 1.0 Beta 4.3:
+	Added Filter to menu.
+	Added filter methods in ImageShower.
+	Filter API folows the  example of TranslatorPanel
+	We use the 3 addons that come with TranslatorPanel
+Ver 1.0 Beta 4.2:
+	Fixed big problem with crash. If still loading dir and you quit.
+	Addid in Watch_Directory code.
+	We now follow the directory which we are in . .so we watch current dir
+	We do not yet act upon the directy watch info.
+	We will in the futrure act upon add/del/move info messages.
+Ver 1.0 Beta 4.1:
+	Thanks to G_McLoeds testing .. we have added Threads to the selection list
+	The thread does not speed up the actuall listing but should free up to do other stuff
+Ver 1.0 Beta 4.0:
+	We are going to use the Idea in TPreferences.
+	We are going to extend a BMessage and use that as our settings file.
+	This will cause older versions of the ImageShow settings file not to work.
+	Should we auto check and convert settings file? (we dont now)
+	We got the SplitPane Setings saved. lots of code change.
+	Added lots of code to implement Rename. Tracker style.
+	More Rename stuff (crashes some times, so I took that out)
+	Delete now works. (it deletes though)
+	Delete Moves the file/dir to the trash now  :)
+	If you are in the Trash folder and do a delete, it removes itself from the list, thats all.
+	If you delete it now removes itself from the list view .. I like that ..
+	Cleaned up the code. Should be a litte nicer now.
+	Fixed some stuff. Lots more to go.
+	Lots more stuff to add but none of that was stable enough for this ver.
+	Only two prjects left to do. Cut/Copy/Past and Order/Arange the list.
+Ver 1.0 Beta 3.9:
+	Added SplitPane view. Now you can slid the bar back and forth
+	Did major work on this SplitPane. Will release code for it soon.
+	Fixed some little buggs in view that messed with splitpane
+	Currently splitpane does not have a user customize area. (double click on it)
+	It also does not save setting of itself (will make a niffty BMessage of that)
+	Also it flickers just a little bit.
+	Added spacebar for a smart Next Image (not too smart right now)
+	Got the BigBeDir and BigBeFile icon stuffed into the Resource (I used Resourcer)
+Ver 1.0 Beta 3.8:
+	Fixed the Rotate code so that it works now.
+	Both CW and CCW rotate work now.
+	Got Filp Horizontal and Flip Vertical working.
+	Cleaned up the Ugly folder icon when it was big.
+	Added in a BlankIcon for things that are not images when in thumb mode
+	Made Seclected items look better (little highlight problem) 
+	We now List the items faster (One loop instead of two - Dir/File)
+Ver 1.0 Beta 3.7:
+	Lots of little bugs around but we are feature lock ...
+	From here we will only do bug fixes and then we will add more latter.
+	This is  because I want to fix all the current things in my prog :)
+	Added large images to selection panel.
+	Added little toggle menu item. Gota love that.
+	Last thing we might add is a progress bar while loading dir list and images
+Ver 1.0 Beta 3.6:
+	Adding in code to only show Images and Dirs in list.
+	Fixed small problem with mime types that were "image" and not "image/type"
+	Enabled menu Item to show only Image files. (need to add check mark)
+	Added little check mark to the MenuItem for OnlyShowImages :)
+	Started big project to make a new Selection panel with Thumbnail view
+	Added losts of stuff to the selection panel right click menu.
+	Added Get info to right click menu
+	Get Info works now! 
+Ver 1.0 Beta 3.5:
+	Fixed Stupid error with SetBackground on the Menu bar, popup worked though
+	Added the beginig of the Rotate image code.
+	Need to work on mouse move still.
+ver 1.0 Beta 3.4:
+	Fixed some problems with drawing over last row of image. 
+	Added in most of the mouse handleing for draging the image in ActaullSize mode
+	Added lost of mouse stuff for moveing image.
+	Running into some problems with scrollbars though while moveing img. rrrrr
+ver 1.0 Beta 3.3:
+	Finished up scrollbars. They prity much work right now.
+	Still bad flicker on resize. This is mainly a BScrollView thing will try to fix this.
+	Remover my beloved Threads because they hung some times
+	I think this is bacause we kill the translator that is running and it doesn't like it
+	Lots little code cleaned up .. so it is more stable now too.
+	Both Aspect Ratios are in there - the old and the new one. So if you liked the old ...
+	Still working on SlideShow. as you can see other things have been going on though
+ver 1.0 Beta 3.2:
+	FIXED THE 60 IMAGE LIMIT BUG
+	99% of the credit goes to Dragfly (yes the guy who wrote Butterfly)
+	This was a stupid bug that we should all learn from.
+	BNodeInfo NI(new BNode(path.Path())); Is BAD it should read
+	BNode *nod = new BNode(path.Path()); BNodeInfo NI(nod); ... delete nod;
+	You see we where creating lots of BNodes and thus the OS said "No more for you!"
+	So now we get rid of them and life is much better.  
+	So Dragfly, thanks and if I ever charge for my app. You get it FREE!!
+ver 1.0 Beta 3.1:
+	Added something Wonderfull .. the ImageShower is now Threaded.
+	Sometimes we get stuck inside of our Translate thread (that sucks) BUG
+	You can scroll through images Verry fast. and will not bog down.!! I love this.
+	Fixed that AspectRatio .. It gets bigger now. Like its suposed too
+	Scorllbars mosttly worknow .. redraw is bad sometimed though
+	Cleaned up the Scrollbar code. The Shower nows has control of them
+	Shower disbales the scrollbars for everthing exept full size.
+	This is going to be a slow and painful ver
+	We are trying to fix a bug that is croping up. It is verry illusive.
+	Somethnin is going on. If we chage some code it effects other code (not suposedto)
+	Although this BUG is eating at me - we will try to get some stuff added. 
+	Also it looks as though there is going to be a lot of code change gong on.
+	ImageShow is currently weighing in at 2000 lines of code!
+ver 1.0 Beta 3.0:
+	Total rewrite of the Selection panel.!!!
+	100% new code in ImageSelection panel.!!!
+	Added Tile draw mode, kewl for images in ~/SampleMedia/desktop/textures
+	Added Height-Width in StatusBar. kewl hu ..
+	Bug with tile fixed too.(+1 off) (I was filling bebits page out and though about it)
+	Redid Keyboard navigation. big fix.
+	Up and Down arrow navigate through view.
+	Auto loads file if ontop of it via keyboard.
+	To enter directory press enter
+	Home key takes you to home Dir.
+	Page up takes you to the first item in the list. (after "..")
+	Page down takes you to the last thing in the list
+	Selection should be a little more "friendlier"
+	Got rid of damn white corners of scrollbar. although still draw incorrect (be fault)
+	Fixxed infinity messageing look that cause crash.
+	Got rid of blue selection box around selectionPanel .. was tacky
+	For the 10th time I fixed all the resizeing and fullscreen saveing stuff
+	Now comeing back and quiting in fullscreen mode work, I know they do this time
+	Menu comands for next,last,fist,prev image now work. nothing big there
+	fixed bug if you hit up arrow first thing. -1 is bad, mmok 
+	page up error with no entry in directory fixxed
+	Double clicking a image, it will bring ImageShow to the top, front, if open
+	Bug fixxes
+	Streach is now OPT-E not OPT-S
+	Save As is not OPT-S 
+ver 1.0 Beta 2.9:
+	Small fix where I forgot to Lock the Window
+	Fix of Set Background. more versital now.  
+	StatusBar now show current path (Its good to know where the hell you are)
+	Fix of Translator save panel.
+	 (We are useing TraslatorSavePanel by Daniel Switkin(switkin@be.com)) 
+ver 1.0 Beta 2.8:
+	Now Set as backgroundworks perfectly (thas was totaly wacky)
+	Random bug fixs. More stable than ever (let me know if it crashes on you)
+ver 1.0 Beta 2.7:
+	It's now posible to right click on a img and set it as the background (WSpace 1 only)
+	SuperSpy(derhally@desertnights.com) on #bedev helped me fix Background code
+ver 1.0 Beta 2.6:
+	Fixed that damn save as menu. It should fully work now
+ver 1.0 Beta 2.5:
+	Added in a popup menu. right click on image.
+	fixed some stuff. blah blah blah
+	More new features.
+ver 1.0 Beta 2.4:
+	Now you can save images in any formate. WOW.
+	Oh and OPTION-Q does work now.
+	And Quiting in Maximized mode works too now. I love bug fixen
+	If you take a look at the menu bar you can see things I am working on.
+	Trying hard to get that sort and slide show working - soon
+ver 1.0 Beta 2.3:
+	Fixed the bad flicker problem thanks to  Heikki Suhonen (the ArtPaint guy) 
+	Started adding in the ShowSlide window.
+	!!Currently the OPTION-Q key dose not save state.!! 
+	!!Quiting in Max mode, doesn't come up in the right window. (worked yesterday)
+ver 1.0 Beta 2.2:
+	Embeded logo2.png into the rsrc file. Thats always nice
+ver 1.0 Beta 2.1:
+	Oops. I didn't even know that double clicking on a image was messed up. Sorry yall.
+	its fixed now.  Gess I need to do a good test before uploading new vers :)
+	Also fixed bug if you hit OPTION-Q .. it will now save prefs. 
+	Added in Toggle fullScreen ... big plus
+ver 1.0 Beta 2.0:
+	DOES NOT EAT MEMORY !!!!!!!!!
+	Most all the Drawing modes work (Aspect, Stretch, blah)
+	flickers on resize .. Can't figure out how to Double buffer a BView !!??!!
+ver 1.0 Beta 1.0:
+ 	Stuff .. it shows images. WOW
+
+YNOP
+ynop@acm.org  
+TheAbstractCompany
+http://www.latech.edu/~jta001/BeOS/index.html
