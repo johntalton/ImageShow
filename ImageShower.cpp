@@ -17,13 +17,17 @@
 #include <FindDirectory.h>
 #include <Directory.h>
 
-//#include <stdio.h>
+#include <stdio.h>
 
 #include "Globals.h"
 #include "ImageShower.h"
-#include "BitmapDrawer.h"
-#include "Addons/ImageFilter.h"
+//#include "BitmapDrawer.h"
+//#include "Addons/ImageFilter.h"
 #include "ImageShowWindow.h"
+#include "YLanguageClass.h"
+#include "BugOutDef.h"
+
+extern BugOut db;
 
 /*******************************************************
 *   This is the actual Image displayer. We do all the 
@@ -32,20 +36,47 @@
 *******************************************************/
 ImageShower::ImageShower(BRect frame, uint32 mode):
              BView(frame,"ImageShower",mode,B_WILL_DRAW|B_PULSE_NEEDED|B_FRAME_EVENTS){//
+   db.SendMessage("Constructing ImageShower");
    SetViewColor(B_TRANSPARENT_32_BIT); // go tran so we have control over drawing
    img = BTranslationUtils::GetBitmap("Logo");
-   redraw=false;
+   undoimg = NULL;
+   undoable = false;
+   redraw = false;
    drawMode = OLD_ASPECT;
+   flipID = rot90ID = mirrorID = rot_90ID = -1;
    find_directory(B_USER_DIRECTORY, &CurrentPath);// set to home dir
    TmpImgPath.SetTo("");
    //TranserThread = 0;
    Draggin=false;
    HSB = NULL;
    VSB = NULL;
-   filters = NULL;
+//   filters = NULL;
    BGColor.red = 0; BGColor.green = 0; BGColor.blue = 0;
    
+   TIDOK = false;
+   
+   db.SendMessage("Spawning List thread");
+   resume_thread(spawn_thread(DoFilterMenu, "Filter ID List", B_NORMAL_PRIORITY, this));
+   db.SendMessage("List thread spawned");
+   
+   TransLock = new BLocker("TranslatorLock");
+   db.SendMessage("ImageShower constructed perfectly");
+}
 
+/*******************************************************
+*   Destroy it all
+*******************************************************/
+ImageShower::~ImageShower(){
+   delete img;
+//   delete filters;
+   delete TransLock;
+}
+
+/*******************************************************
+*
+*******************************************************/
+int32 ImageShower::MakeMenu(){
+  /* db.SendMessage("Makeing Addon list");
    app_info ai;
    be_app->GetAppInfo(&ai);
    BEntry entry(&ai.ref);
@@ -56,7 +87,7 @@ ImageShower::ImageShower(BRect frame, uint32 mode):
    path.Append("Addons");
    BDirectory directory(path.Path());
    
-   ImageFilter *temp = NULL;
+//   ImageFilter *temp = NULL;
 
    while (directory.GetNextEntry(&entry, true) == B_OK){
       entry.GetPath(&path);
@@ -79,10 +110,23 @@ ImageShower::ImageShower(BRect frame, uint32 mode):
             }
             temp->next = filter;
          }
+         // Grap a particular filter for later use
+         if(!strcmp(filter->GetName(),"Flip Horizontal")){
+            flipID = filter->GetId();
+         }else if(!strcmp(filter->GetName(),"Flip Vertical")){
+            mirrorID = filter->GetId();
+         }else if(!strcmp(filter->GetName(),"Rotate CCW 90")){
+            rot_90ID = filter->GetId();
+         }else if(!strcmp(filter->GetName(),"Rotate CW 90")){
+            rot90ID = filter->GetId();
+         }
+         //end funky grab  
       }
    }
-
+   db.SendMessage("Addon list made");*/
+   return B_OK;
 }
+
 
 /*******************************************************
 *   We have been targeted
@@ -103,6 +147,7 @@ void ImageShower::TargetedByScrollView(BScrollView *sv){
    if(HSB){
       HSB->SetRange(0,0);
    }
+   db.SendMessage("ImageShower Targeted By Scrollbars");
 }
 
 /*******************************************************
@@ -111,11 +156,14 @@ void ImageShower::TargetedByScrollView(BScrollView *sv){
 void ImageShower::Draw(BRect frame){
    int i,j;
    float sizeX=0,sizeY=0,scale=0;
-
+   
+   BRect f;
+   
    SetHighColor(BGColor.red,BGColor.green,BGColor.blue,255);
    SetLowColor(BGColor.red,BGColor.green,BGColor.blue,255);
 
    Window()->Lock();
+  
    if(img != NULL){ 
       BRect centerdImag;
       BRect imgB = img->Bounds();
@@ -127,13 +175,19 @@ void ImageShower::Draw(BRect frame){
          if(HSB){ HSB->SetRange(0,0); } 
       }    
       //SetDrawingMode(B_OP_BLEND); 
-      
       switch(drawMode){
          case WINDOW_FIT:  // Resize window around image
             //NO BREAK just fall thought;
          case ASPECT:  // fit in window best - keep aspect ratio though
+            if(imgB.right == 0){
+               imgB.right = 1;
+            }
+            if(imgB.bottom == 0){
+               imgB.bottom = 1;
+            }
             sizeX = (tmpB.right/imgB.right);
             sizeY = (tmpB.bottom/imgB.bottom);
+
             if(sizeX > sizeY){
                 imgB.bottom *= sizeY;
                 imgB.right *= sizeY;
@@ -147,13 +201,22 @@ void ImageShower::Draw(BRect frame){
             centerdImag.bottom=centerdImag.top + imgB.Height();
             
             DrawBitmapAsync(img, img->Bounds(), centerdImag); 
+            
+            // This is our new way of doing things with our kewl
+            // resize plugins and stuff
+            f = centerdImag;
+            f.OffsetTo(0,0);
+            //DrawBitmapAsync(resizeImg(img,f),centerdImag);
+            
             //fill all around the bitmap
-            if(sizeY > sizeX){
-               FillRect(BRect(tmpB.left,tmpB.top,tmpB.right,centerdImag.top-1),B_SOLID_LOW);// Top
-               FillRect(BRect(tmpB.left,centerdImag.bottom+1,tmpB.right,tmpB.bottom),B_SOLID_LOW);// Bottom
-            }else{
-               FillRect(BRect(tmpB.left,centerdImag.top-1,centerdImag.left-1,centerdImag.bottom),B_SOLID_LOW);// Left
-               FillRect(BRect(centerdImag.right+1,centerdImag.top-1,tmpB.right,centerdImag.bottom),B_SOLID_LOW);// right
+            if(!IsPrinting()){
+               if(sizeY > sizeX){
+                  FillRect(BRect(tmpB.left,tmpB.top,tmpB.right,centerdImag.top-1),B_SOLID_LOW);// Top
+                  FillRect(BRect(tmpB.left,centerdImag.bottom+1,tmpB.right,tmpB.bottom),B_SOLID_LOW);// Bottom
+               }else{
+                  FillRect(BRect(tmpB.left,centerdImag.top-1,centerdImag.left-1,centerdImag.bottom),B_SOLID_LOW);// Left
+                  FillRect(BRect(centerdImag.right+1,centerdImag.top-1,tmpB.right,centerdImag.bottom),B_SOLID_LOW);// right
+               }
             }
             Sync();
             break;
@@ -175,10 +238,12 @@ void ImageShower::Draw(BRect frame){
             
             DrawBitmapAsync(img, img->Bounds(), centerdImag); 
             //fill all around the bitmap
-            FillRect(BRect(tmpB.left,tmpB.top,tmpB.right,centerdImag.top-1),B_SOLID_LOW);// Top
-            FillRect(BRect(tmpB.left,centerdImag.bottom+1,tmpB.right,tmpB.bottom),B_SOLID_LOW);// Bottom
-            FillRect(BRect(tmpB.left,centerdImag.top-1,centerdImag.left-1,centerdImag.bottom),B_SOLID_LOW);// Left
-            FillRect(BRect(centerdImag.right+1,centerdImag.top-1,tmpB.right,centerdImag.bottom),B_SOLID_LOW);// right
+            if(!IsPrinting()){
+               FillRect(BRect(tmpB.left,tmpB.top,tmpB.right,centerdImag.top-1),B_SOLID_LOW);// Top
+               FillRect(BRect(tmpB.left,centerdImag.bottom+1,tmpB.right,tmpB.bottom),B_SOLID_LOW);// Bottom
+               FillRect(BRect(tmpB.left,centerdImag.top-1,centerdImag.left-1,centerdImag.bottom),B_SOLID_LOW);// Left
+               FillRect(BRect(centerdImag.right+1,centerdImag.top-1,tmpB.right,centerdImag.bottom),B_SOLID_LOW);// right
+            }
             Sync();
             break;
          case ACTUAL_SIZE: // draw center in real size
@@ -188,10 +253,12 @@ void ImageShower::Draw(BRect frame){
             centerdImag.bottom=centerdImag.top + imgB.Height();
              
             DrawBitmapAsync(img, img->Bounds(), centerdImag); 
-            FillRect(BRect(tmpB.left,tmpB.top,tmpB.right,centerdImag.top-1),B_SOLID_LOW);// Top
-            FillRect(BRect(tmpB.left,centerdImag.bottom+1,tmpB.right,tmpB.bottom),B_SOLID_LOW);// Bottom
-            FillRect(BRect(tmpB.left,centerdImag.top-1,centerdImag.left-1,centerdImag.bottom),B_SOLID_LOW);// Left
-            FillRect(BRect(centerdImag.right+1,centerdImag.top-1,tmpB.right,centerdImag.bottom),B_SOLID_LOW);// right
+            if(!IsPrinting()){
+               FillRect(BRect(tmpB.left,tmpB.top,tmpB.right,centerdImag.top-1),B_SOLID_LOW);// Top
+               FillRect(BRect(tmpB.left,centerdImag.bottom+1,tmpB.right,tmpB.bottom),B_SOLID_LOW);// Bottom
+               FillRect(BRect(tmpB.left,centerdImag.top-1,centerdImag.left-1,centerdImag.bottom),B_SOLID_LOW);// Left
+               FillRect(BRect(centerdImag.right+1,centerdImag.top-1,tmpB.right,centerdImag.bottom),B_SOLID_LOW);// right
+            }
 /*            
             DrawBitmapAsync(img, img->Bounds(), BRect(Offset.x+centerdImag.left,
                                                       Offset.y+centerdImag.top,
@@ -224,9 +291,12 @@ void ImageShower::Draw(BRect frame){
    }else{ // Image is NULL ..hmm
       FillRect(frame,B_SOLID_LOW);// Top
       SetHighColor(255,255,255);
-      MovePenTo(frame.left+5, frame.bottom-2);
-      DrawString("The Image Was NULL");
+      MovePenTo(Bounds().left+5, Bounds().bottom-2);
+      DrawString(Language.get("NULL_IMAGE"));
    }
+   
+   //FillRect(BRect(BoxStart,BoxStop));
+   
    Window()->Unlock();
 }
 
@@ -268,51 +338,46 @@ BBitmap* ImageShower::GetBitmap(){
 void ImageShower::MakeMenu(BMenu* menu){
    BMenuItem* item;
    BMenu *submenu;
-  // BMenu *subsubmenu;
-	
-/*   menuItem = new BMenuItem("About ", new BMessage(B_ABOUT_REQUESTED));
-   menu->AddItem(menuItem);
-   menuItem = new BMenuItem("Help...", new BMessage(msg_help));
-   menu->AddItem(menuItem);
-   menu->AddSeparatorItem();
-*/
 
-   menu->AddItem(new BMenuItem("Image Menu",NULL));
-
-   menu->AddItem(new BSeparatorItem());
-   
-   submenu = new BMenu("Edit");
-   submenu->AddItem(new BMenuItem("Cut",new BMessage(NO_FUNCTION_YET)));
-   submenu->AddItem(new BMenuItem("Copy",new BMessage(NO_FUNCTION_YET)));
+   submenu = new BMenu(Language.get("EDIT"));
+   submenu->AddItem(item = new BMenuItem(Language.get("UNDO"),new BMessage(UNDO),'U'));
+   if(!undoable){
+      item->SetEnabled(false);
+   }
    submenu->AddItem(new BSeparatorItem());
-   submenu->AddItem(new BMenuItem("Select All",new BMessage(NO_FUNCTION_YET)));
+   submenu->AddItem(new BMenuItem(Language.get("CUT"),new BMessage(B_CUT)));
+   submenu->AddItem(new BMenuItem(Language.get("COPY"),new BMessage(B_COPY)));
+   submenu->AddItem(new BMenuItem(Language.get("PASTE"),new BMessage(B_PASTE)));
+   submenu->AddItem(new BSeparatorItem());
+   submenu->AddItem(new BMenuItem(Language.get("SELECT_ALL"),new BMessage(B_SELECT_ALL)));
    menu->AddItem(submenu);
  
-   submenu = new BMenu("Mode");
-   submenu->AddItem(item = new BMenuItem("Actual Size",new BMessage(ACTUAL_SIZE),'C'));
+   submenu = new BMenu(Language.get("MODE"));
+   submenu->AddItem(item = new BMenuItem(Language.get("ACTUAL_SIZE"),new BMessage(ACTUAL_SIZE),'1'));
    if(drawMode == ACTUAL_SIZE){ item->SetMarked(true); }
-   submenu->AddItem(item = new BMenuItem("New Aspect Ratio",new BMessage(ASPECT),'R'));
+   submenu->AddItem(item = new BMenuItem(Language.get("NEW_ASPECT"),new BMessage(ASPECT),'2'));
    if(drawMode == ASPECT){ item->SetMarked(true); }
-   submenu->AddItem(item = new BMenuItem("Aspect Ratio",new BMessage(OLD_ASPECT),'P'));
+   submenu->AddItem(item = new BMenuItem(Language.get("ASPECT"),new BMessage(OLD_ASPECT),'3'));
    if(drawMode == OLD_ASPECT){ item->SetMarked(true); }
-   submenu->AddItem(item = new BMenuItem("Stretch",new BMessage(STRETCH),'E'));
+   submenu->AddItem(item = new BMenuItem(Language.get("STRETCH"),new BMessage(STRETCH),'4'));
    if(drawMode == STRETCH){ item->SetMarked(true); }
-   submenu->AddItem(item = new BMenuItem("Resize Win to fit",new BMessage(WINDOW_FIT),'Z'));
+   submenu->AddItem(item = new BMenuItem(Language.get("RESIZE_TO_FIT"),new BMessage(WINDOW_FIT),'5'));
    if(drawMode == WINDOW_FIT){ item->SetMarked(true); }
-   submenu->AddItem(item = new BMenuItem("Tile image",new BMessage(TILE),'T'));
+   submenu->AddItem(item = new BMenuItem(Language.get("TILE"),new BMessage(TILE),'6'));
    if(drawMode == TILE){ item->SetMarked(true); }
    menu->AddItem(submenu);
  
-   submenu = new BMenu("Set as Background");
-   submenu->AddItem(new BMenuItem("Centered",new BMessage(SET_BG_CENTER)));
-   submenu->AddItem(new BMenuItem("Scaled",new BMessage(SET_BG_SCALED)));
-   submenu->AddItem(new BMenuItem("Tiled",new BMessage(SET_BG_TILED)));
+   submenu = new BMenu(Language.get("SET_AS_BG"));
+   submenu->AddItem(new BMenuItem(Language.get("CENTERED"),new BMessage(SET_BG_CENTER)));
+   submenu->AddItem(new BMenuItem(Language.get("SCALED"),new BMessage(SET_BG_SCALED)));
+   submenu->AddItem(new BMenuItem(Language.get("TILED"),new BMessage(SET_BG_TILED)));
    menu->AddItem(submenu);
    
-   menu->AddItem(new BMenuItem("Toggle FullScreen",new BMessage(FULLSCREEN),'F'));
-   menu->AddItem(new BMenuItem("Get Info",new BMessage(GET_IMG_INFO)));
+   menu->AddItem(new BMenuItem(Language.get("TOGGLE_FULL_SCREEN"),new BMessage(FULLSCREEN),'F'));
+   menu->AddItem(new BSeparatorItem());
+   menu->AddItem(new BMenuItem(Language.get("GET_INFO"),new BMessage(GET_IMG_INFO)));
    menu->AddItem(new BMenuItem("Nuke a small country",new BMessage(NO_FUNCTION_YET)));
-   ///menu->AddItem(submenu);
+
 }
 
 /*******************************************************
@@ -340,11 +405,15 @@ void ImageShower::MouseDown(BPoint where){
 				   Window()->PostMessage(selected->Message()->what);
 				}
 			}
+			delete menu;
 		}
-		if((buttons & B_PRIMARY_MOUSE_BUTTON) && modifiers & B_SHIFT_KEY){
+		if((buttons & B_PRIMARY_MOUSE_BUTTON) && (modifiers & B_SHIFT_KEY)){
 		   here = where;
-		 //  EndRectTracking();
-		  // BeginRectTracking(BRect(where.x,where.y,where.x,where.y),B_TRACK_RECT_CORNER);
+		   DrawingBox = true;
+		   BoxStart = where;
+		   BoxStop = BoxStart;
+		   //EndRectTracking();
+		   //BeginRectTracking(BRect(where.x,where.y,where.x,where.y),B_TRACK_RECT_CORNER);
 		}else if((buttons & B_PRIMARY_MOUSE_BUTTON) && !Draggin){
 		   Draggin= true; // this is so we can drag
 		   here = where;
@@ -360,7 +429,11 @@ void ImageShower::MouseDown(BPoint where){
 *******************************************************/
 void ImageShower::MouseUp(BPoint where){
    Draggin = false; // stop following mouse
-   EndRectTracking();
+   if(DrawingBox){
+      DrawingBox = false;
+      BoxStop = where;
+   }
+   //EndRectTracking();
  //  BeginRectTracking(BRect(here.x,here.y,where.x,where.y));
 }
 
@@ -378,8 +451,8 @@ void ImageShower::MouseMoved(BPoint where,uint32 info,const BMessage *m){
          //HSB->SetValue(HSB->Value()+((where.x - here.x)/2));
          //VSB->SetValue(VSB->Value()+((where.y - here.y)/2));
 
-         HSB->SetValue(HSB->Value()+((here.x - where.x)));
-         VSB->SetValue(VSB->Value()+((here.y - where.y)));
+         HSB->SetValue(HSB->Value()+((here.x - where.x)/2));
+         VSB->SetValue(VSB->Value()+((here.y - where.y)/2));
         
       //  printf("mouse is at %f,%f and the images is at %f,%f\n",where.x,where.y,here.x,here.y);
        
@@ -388,6 +461,9 @@ void ImageShower::MouseMoved(BPoint where,uint32 info,const BMessage *m){
          //Invalidate();
          
       }     
+   }else if(DrawingBox){
+      BoxStop =where;
+      
    }
 }
 
@@ -494,19 +570,20 @@ void ImageShower::MessageReceived(BMessage *msg){
    entry_ref ref;
    BPath path;
    BRect rec;
-   BBitmap *new_img;
-   BMessage *new_msg;
+   BBitmap *new_img = NULL;
+   BMessage *new_msg = NULL;
    BMessage SizeMsg(IMAGE_SIZE);
-   ImageFilter *temp;
+//   ImageFilter *temp = NULL;
    rgb_color *c = NULL;
    ssize_t s;
    if(img != NULL){ rec = img->Bounds(); }
    BRect us = Bounds();
+//   uint32 id;
+//   int32 count = 0;
    
    float x = (rec.Width()-us.Width());
    float y = (rec.Height()-us.Height());
    
-   new_img = NULL;
    switch(msg->what){
    case SHOWER_COLOR:
       msg->FindData("RGBColor",B_RGB_COLOR_TYPE,(const void**)&c,&s);
@@ -515,11 +592,22 @@ void ImageShower::MessageReceived(BMessage *msg){
       ((ImageShowWindow*)Window())->ShowerColor = *c;
       break;
    case B_PASTE:
-      msg->FindData("RGBColor",B_RGB_COLOR_TYPE,(const void**)&c,&s);
-      BGColor = *c;
-      Invalidate();
-      ((ImageShowWindow*)Window())->ShowerColor = *c;
-      
+      if(msg->FindData("RGBColor",B_RGB_COLOR_TYPE,(const void**)&c,&s) == B_OK){
+         BGColor = *c;
+         Invalidate();
+         ((ImageShowWindow*)Window())->ShowerColor = *c;
+      }else{
+         (new BAlert(NULL,"paste",""))->Go();
+      }
+      break;
+   case B_CUT:
+       (new BAlert(NULL,"cut",""))->Go();
+      break;
+   case B_COPY:
+      (new BAlert(NULL,"copy",""))->Go();
+      break;
+   case B_SELECT_ALL:
+      (new BAlert(NULL,"select all",""))->Go();
       break;
    case B_SIMPLE_DATA: // DRAG-N-DROP
       // Look for a ref in the message
@@ -559,6 +647,17 @@ void ImageShower::MessageReceived(BMessage *msg){
       }
       break;
    case CHANGE_IMAGE: // WE WERE TOLD TO CHANGE IMAGES
+   
+     /// new_msg = Looper()->CurrentMessage();
+     // while(Looper()->MessageQueue()->FindMessage(CHANGE_IMAGE,pos) != NULL){
+     //    delete new_msg;
+     //    new_msg = Looper()->DetachCurrentMessage();
+     // }
+      //if(new_msg->what == CHANGE_IMAGE){
+      //   new_msg = DetachCurrentMessage();
+      //   delete new_msg;
+     // }
+      
       //Find the path to the image. Use a global BPath
       //  So that the thread can get to it and load the
       //  image up. After we find the path - kill andy
@@ -568,8 +667,11 @@ void ImageShower::MessageReceived(BMessage *msg){
           // printf("No imgPath?\n");
            break;
       }
-
-      //We do this or do the threading .. hmmm
+      
+      Translator(); // instead of threaded Just call it
+      
+  /*
+     //We do this or do the threading .. hmmm
       new_img = BTranslationUtils::GetBitmapFile(TmpImgPath.Path());//tmpString
 
       if(new_img == NULL){
@@ -589,12 +691,25 @@ void ImageShower::MessageReceived(BMessage *msg){
          redraw = true;
       }
       TmpImgPath.Unset(); // Just for good messure
-    /*  
-      kill_thread(TranserThread);
-      printf("Kill and start thread\n");
-      TranserThread = spawn_thread(TransIt, "Translate da filz", B_NORMAL_PRIORITY, this);
-	  resume_thread(TranserThread);
+     // Window()->PostMessage(new BMessage(FINISHED));
       */
+//    /*  
+      //if(TIDOK){
+        // wait_for_thread(TranserThread,NULL);
+      //kill_thread(TranserThread);
+      //}
+      
+    
+     
+//      if(TransLock->CountLocks() > 0){ 
+//         kill_thread(TransIt);
+//         TransLock->Unlock();
+//      }
+//      TranserThread = spawn_thread(TransIt, "Translate da filz", B_NORMAL_PRIORITY, this);
+///	  resume_thread(TranserThread);
+	     //wait_for_thread(TranserThread,&stat);
+
+//      */
       break;
    case WINDOW_FIT:// set up the drawing mode
       new_msg = new BMessage(RESIZE_TO_IMAGE);
@@ -627,38 +742,64 @@ void ImageShower::MessageReceived(BMessage *msg){
    case SET_BG_TILED:  
       SetImgAsBG(msg->what);
       break; 
+   case UNDO:
+      if(undoimg == NULL){ break; }
+      delete img;
+      img = new BBitmap(undoimg);
+      Invalidate();
+      delete undoimg;
+      undoimg = NULL;
+      Window()->PostMessage(new BMessage(UNDO_FALSE));
+      undoable = false;
+      break;
    case RUN_FILTER:
-      //Window()->ShowStatusBar();
-      
-      uint32 id;
-      if (msg->FindInt32("filter_id", (int32 *)&id) != B_OK) return;
-      temp = filters;
-      while(true){
-         if (temp == NULL) return;
-         if (temp->GetId() == id) break;
-         temp = temp->next;
-      }
-      
-      if(temp->GetVer() == 1){
-         new_img = temp->Run(img);
-         if (new_img == NULL) {
-            BAlert *alert = new BAlert(NULL, "Error filtering image!", "OK");
-            alert->Go();
-            break;
+      // if (msg->FindInt32("filter_id", (int32 *)&id) != B_OK) return;
+/*      while(msg->FindInt32("filter_id", count++,(int32 *)&id) == B_OK){
+         temp = filters;
+         while(true){
+            if (temp == NULL) return;
+            if (temp->GetId() == id) break;
+            temp = temp->next;
          }
-      
-         //Window()->HideStatusBar();
-      
+         if(temp->GetVer() == 1){
+            new_img = temp->Run(img);
+            if (new_img == NULL) {
+               //BAlert *alert = new BAlert(NULL, Language.get("FILTER_ERROR"),Language.get("OK"));
+               //alert->Go();
+               (new BAlert(NULL, Language.get("FILTER_ERROR"),Language.get("OK")))->Go();
+               break;
+            }
+            // We are about to delete the old image and create
+            // a new image in its place. You know this would be 
+            // A fine place to add in undo support
+        
+            if(undoimg != NULL){ delete undoimg; undoimg = NULL; }
+            undoimg = new BBitmap(img);
+            // Set the undo menu true
+            undoable = true;
+            Window()->PostMessage(new BMessage(UNDO_TRUE));
+         
+            delete img;
+            img = new BBitmap(new_img);
+         }
+      }*/
+      Invalidate();
+      break;
+   case SHOW_LOGO:
+      // Just a little niffty show logo thingy :)
+      new_img = BTranslationUtils::GetBitmap("Logo");
+      if(new_img){
          delete img;
-         img = new BBitmap(new_img);
-         Invalidate();
+         img = new BBitmap(new_img);    
+         redraw = true;  
       }
       break;
    default:
       BView::MessageReceived(msg);
       break;
    }
-   delete new_img;
+   if(new_img != NULL){ delete new_img; }
+   if(new_msg != NULL){ delete new_msg; }
 }
 
 /*******************************************************
@@ -691,34 +832,123 @@ void ImageShower::FixUPScrollBars(){
 *   when we don't want to trans anymore.
 *******************************************************/
 int32 ImageShower::Translator(){
+   TransLock->Lock();
+   db.SendMessage("Translating Image");
+   Window()->PostMessage(new BMessage(UNDO_FALSE));
+   if(undoimg != NULL){ delete undoimg; undoimg = NULL; }
+   Window()->PostMessage(new BMessage(WORKING));
    BBitmap *new_img;
-
+   //printf("Entering Transer\n");
    // We need to kill the old translator thread and spin off 
    //  a new one here..
    new_img = BTranslationUtils::GetBitmapFile(TmpImgPath.Path());//tmpString
 
    if(new_img == NULL){
       //Thats not valid image .. oh well
+      // Post a NULL Image message
+      Window()->PostMessage(new BMessage(NULL_IMAGE));
+     //    why are we posting null image message here ????
+      
    }else{
-      delete img;
+      Looper()->Lock();
       CurrentPath.SetTo(TmpImgPath.Path());//tmpString
+      delete img;
       img = new BBitmap(new_img);
+      Looper()->Unlock();
       BMessage SizeMsg(IMAGE_SIZE);
       SizeMsg.MakeEmpty();
       if(SizeMsg.AddRect("imgsize",img->Bounds()) == B_OK){ 
          //Parent()->Looper()->PostMessage(&SizeMsg);
+         //Window()->Lock();
          Window()->PostMessage(&SizeMsg);
+         //Widnow()->Unlock();
       }
+      Looper()->Lock();
       FixUPScrollBars();
       if(drawMode == WINDOW_FIT){ MessageReceived(new BMessage(WINDOW_FIT));}
+   
+      //start of big hack
+      int32 mode = 27;
+      BMessage dofilter(RUN_FILTER);
+      switch(mode){
+      case 27:
+         break;
+      case -28:
+         dofilter.AddInt32("filter_id",flipID);
+         break;
+      case 78:
+         dofilter.AddInt32("filter_id",mirrorID);
+         break;
+      case -68:
+         dofilter.AddInt32("filter_id",flipID);
+         dofilter.AddInt32("filter_id",mirrorID);
+         break;
+      case -58:
+         dofilter.AddInt32("filter_id",rot90ID);
+         break;
+      case 108:
+         dofilter.AddInt32("filter_id",rot_90ID);
+         break;
+      case -79:
+         dofilter.AddInt32("filter_id",rot90ID);
+         dofilter.AddInt32("filter_id",rot90ID);
+         break;
+      case -109:
+         dofilter.AddInt32("filter_id",mirrorID);
+         dofilter.AddInt32("filter_id",rot90ID);
+         break;
+      }
+      Window()->PostMessage(&dofilter);
+      // end of our big hack
+      
+      Looper()->Unlock();
       redraw = true;
    }
    TmpImgPath.Unset(); // Just for good messure
    delete new_img;
+   //printf("Exiting Transer\n");
+   Window()->PostMessage(new BMessage(FINISHED));
+   db.SendMessage("Image Translated Just fine");
+   TransLock->Unlock();
+   
+   
+   
    return 0;
 }
 
-
+/*******************************************************
+*   Resizes the image so its nice and small for thumbs
+*******************************************************/
+BBitmap* ImageShower::resizeImg(BBitmap* Img,BRect r){
+   BBitmap *new_img = new BBitmap(r,B_RGB32,true);
+   if(!new_img->IsValid()){
+      //This could potentaly cause a problem as we are acutaly inside of a 
+      // thread. If we post 2 alerts the app will most likely lock
+      (new BAlert(NULL,Language.get("RESIZE_ERROR"),Language.get("OK")))->Go();
+      return Img;
+   }
+   BView  *blah = new BView(r,"drawer",B_FOLLOW_NONE,B_WILL_DRAW);
+   
+   new_img->AddChild(blah);
+   new_img->Lock();
+   
+   blah->DrawBitmap(Img,Img->Bounds(),blah->Bounds());
+   blah->SetHighColor(255,0,0);
+  // blah->FillRect(blah->Bounds(),B_SOLID_HIGH);
+   blah->DrawString("Resize Exec !",BPoint(100,100));
+   
+   
+   
+   blah->Sync();
+   new_img->RemoveChild(blah);
+   new_img->Unlock();
+   
+   delete blah;
+  // delete Img;
+  // Img = new BBitmap(new_img);
+   //delete new_img;
+   return new_img;
+}
 
 
 

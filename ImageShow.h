@@ -12,7 +12,9 @@ extern const char *APP_SIGNATURE;
 class ImageShow : public BApplication {
    public:
       ImageShow();
+      virtual void ReadyToRun();
       virtual void RefsReceived(BMessage*);
+      virtual void ArgvReceived(int32, char**);
       virtual void AboutRequested();
       virtual void MessageReceived(BMessage*);
       virtual bool QuitRequested();

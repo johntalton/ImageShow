@@ -15,29 +15,45 @@
 #include <Path.h>
 #include <TranslationKit.h>
 #include <TranslationUtils.h>
+#include <Mime.h>
 
-//#include <stdio.h>
+#include <stdio.h>
 
 #include "Globals.h"
+#include "SP_Globals.h"
 #include "ImageShowView.h"
 #include "ImageShower.h"
 #include "TranslatorSavePanel.h"
-#include "FileListView.h"
+
 #include "SplitPane.h"
 #include "ImageShowWindow.h"
+#include "ToolBarView.h"
+#include "ProgressView.h"
+#include "WarningView.h"
+#include "YLanguageClass.h"
+#include "BugOutDef.h"
+#ifdef USE_CCOLUMN 
+ #include "FileView.h"
+#else
+ #include "FileListView.h"
+#endif
+
+extern BugOut db;
 
 /*******************************************************
 *   Setup the main view. Add in all the niffty components
 *   we have made and get things rolling
 *******************************************************/
 ImageShowView::ImageShowView(BWindow *parentWin, BRect frame):BView(frame, "", B_FOLLOW_ALL_SIDES, B_WILL_DRAW){//B_PULSE_NEEDED|B_FRAME_EVENTS
-   SetViewColor(216,216,216,0);
+   SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
    //SetViewColor(233,0,0);
    BRect a,b;
    b = Bounds();
-
+   db.SendMessage("ImageShowView starting up");
+   ToolbarHeight = 30;
+   sec = 2; // slide show time
    parentWindow = parentWin;
-
+   
    StatusBar = new BBox(BRect(b.left-3,b.bottom-14,b.right,b.bottom+3),"StatusBar",B_FOLLOW_LEFT_RIGHT|B_FOLLOW_BOTTOM,B_WILL_DRAW); 
    AddChild(StatusBar);
 
@@ -48,35 +64,55 @@ ImageShowView::ImageShowView(BWindow *parentWin, BRect frame):BView(frame, "", B
  
    ImgSize = new BStringView(BRect(275,2,360,14),"","0x0 pixels");
    StatusBar->AddChild(ImgSize);
-
+   
+   Progress = new ProgressView(BRect(b.right-100,3,b.right-15,12),B_FOLLOW_RIGHT|B_FOLLOW_BOTTOM);
+   StatusBar->AddChild(Progress);
+   
+   a = Progress->Frame();
+   a.right = a.left - 10;
+   a.left = a.right - 100;
+   ValidImage = new WarningView(a,B_FOLLOW_RIGHT|B_FOLLOW_BOTTOM);
+   StatusBar->AddChild(ValidImage);
+ 
+ 
    Bb = new BBox(BRect(b.left,b.top,200,b.bottom - 15),"Box",B_FOLLOW_TOP_BOTTOM);//
-   Bb->SetLabel("Select File/Folder");
+   Bb->SetLabel(Language.get("SELECT_FILE_FOLDER"));
       
    BRect r = Bb->Bounds();
    r.InsetBy(8,8);
    r.top += 10;     
-   r.right -= B_V_SCROLL_BAR_WIDTH;
-   r.bottom -= B_H_SCROLL_BAR_HEIGHT + 0;
+   
 
-   selectPanel = new FileListView(r);  //B_FRAME_EVENTS
-   ListSelector = new BScrollView("scroll", selectPanel, B_FOLLOW_ALL_SIDES, B_WILL_DRAW, true, true);
-   ListSelector->SetViewColor(216,216,216);
-   ListSelector->MakeFocus(false);
-   Bb->AddChild(ListSelector);  
-
-   a = ListSelector->Bounds();
-   a.top = a.bottom - B_H_SCROLL_BAR_HEIGHT - 1;
-   a.left = a.right - B_V_SCROLL_BAR_WIDTH - 1;
-   BBox *box1 = new BBox(a,"leftover",B_FOLLOW_BOTTOM|B_FOLLOW_RIGHT); 
-   ListSelector->AddChild(box1);
+   #ifdef USE_CCOLUMN 
+    selectPanel = new FileView(r,B_FOLLOW_ALL_SIDES);
+    Bb->AddChild(selectPanel);
+    a = selectPanel->Bounds();
+   #else
+    r.right -= B_V_SCROLL_BAR_WIDTH;
+    r.bottom -= B_H_SCROLL_BAR_HEIGHT + 0;
+    selectPanel = new FileListView(r);  //B_FRAME_EVENTS
+    ListSelector = new BScrollView("scroll", selectPanel, B_FOLLOW_ALL_SIDES, B_WILL_DRAW, true, true);
+    ListSelector->SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
+    ListSelector->MakeFocus(false);
+    Bb->AddChild(ListSelector);  
+    a = ListSelector->Bounds();
+    a.top = a.bottom - B_H_SCROLL_BAR_HEIGHT - 1;
+    a.left = a.right - B_V_SCROLL_BAR_WIDTH - 1;
+    BBox *box1 = new BBox(a,"leftover",B_FOLLOW_BOTTOM|B_FOLLOW_RIGHT); 
+    ListSelector->AddChild(box1);
+   #endif
+   
+	
+   
+   
  
    r = BRect(Bb->Bounds().right+10,b.top,b.right-B_V_SCROLL_BAR_WIDTH,b.bottom-15-B_H_SCROLL_BAR_HEIGHT);
 
    imgPanel = new ImageShower(r,B_FOLLOW_ALL_SIDES);
 
    BScrollView *sv = new BScrollView("Scroller", imgPanel, B_FOLLOW_ALL_SIDES,B_WILL_DRAW, true, true);
-   imgPanel->TargetedByScrollView(sv);
-   sv->SetViewColor(216,216,216);
+   imgPanel->TargetedByScrollView(sv); // This get called a second time. Pritty strange that we have to do this
+   sv->SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
    
    a = sv->Bounds();
    a.top = a.bottom - B_H_SCROLL_BAR_HEIGHT - 1;
@@ -85,20 +121,48 @@ ImageShowView::ImageShowView(BWindow *parentWin, BRect frame):BView(frame, "", B
    sv->AddChild(box2);
 
    b = Bounds();
-   SP = new SplitPane(BRect(b.left,b.top,b.right,b.bottom-15),Bb,sv,B_FOLLOW_ALL_SIDES);
+   toolbar = new ToolBarView(BRect(b.left,b.top,b.right,ToolbarHeight));
+   AddChild(toolbar);
    
-   AddChild(SP);
-   SP->SetBarPosition(200); // our default
-}
+   b.top = ToolbarHeight;
+   SP = new SplitPane(BRect(b.left,b.top,b.right,b.bottom-15),Bb,sv,B_FOLLOW_ALL_SIDES);
 
+   AddChild(SP);
+
+   //SP->SetViewOneDetachable(true); 
+   SP->SetBarPosition(150); // our default
+   db.SendMessage("View inited just fine");
+}
 
 /*******************************************************
 *   
 *******************************************************/
 void ImageShowView::AllAttached(){
-   selectPanel->MakeList(path);  
+   db.SendMessage("Attaching all");
+   toolbar->AddItem("LUP","LDN",new BMessage(PREV_IMAGE));
+   toolbar->AddItem("RUP","RDN",new BMessage(NEXT_IMAGE));
+   toolbar->AddItem("FS","FSDN",new BMessage(FULLSCREEN));
+   //toolbar->AddItem("","",new BMessage());
+
+   app_info ai;
+   be_app->GetAppInfo(&ai);
+   BEntry entry(&ai.ref);
+   entry.GetPath(&AppPath);
+   AppPath.GetParent(&AppPath);
    
+   //selectPanel->SetPath(path.Path());
+     
+   db.SendMessage("Spawing slide show");
    ShowSlideThread = spawn_thread(ShowSlide, "Slide Show Runner", B_NORMAL_PRIORITY, this);
+   db.SendMessage("slide show spawned Ok");
+
+}
+
+/*******************************************************
+*   
+*******************************************************/
+BView* ImageShowView::GetIS(){
+   return (BView*)imgPanel;
 }
 
 /*******************************************************
@@ -113,11 +177,12 @@ void ImageShowView::SaveImage(BMessage *message){
    uint32 format;
    ssize_t length = sizeof(translator_id);
    if (message->FindData("translator_id", B_RAW_TYPE, (const void **)&id, &length) != B_OK){ 
-      (new BAlert("Oh","No translator ID","Hmm"))->Go();
+      (new BAlert(NULL,Language.get("NO_TRANS_ID"),Language.get("OK")))->Go();
+     
       return;
    }
    if (message->FindInt32("translator_format", (int32 *)&format) != B_OK){
-      (new BAlert("Oh","Format not valid","Hmm"))->Go();
+      (new BAlert(NULL,Language.get("INVALIDE_FORMAT"),Language.get("OK")))->Go();
       return;
    }
    entry_ref dir;
@@ -130,23 +195,23 @@ void ImageShowView::SaveImage(BMessage *message){
    // Clobber any existing file or create a new one if it didn't exist
    BFile file(&bdir, name, B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
    if (file.InitCheck() != B_OK) {
-      (new BAlert(NULL, "Couldn't create of overwrite that file", "Bummer"))->Go();
+      (new BAlert(NULL, Language.get("CANT_OVERWRITE_FILE"), Language.get("OK")))->Go();
       return;
    }
     
    BTranslatorRoster *roster = BTranslatorRoster::Default();
    BBitmap *bitmap = imgPanel->GetBitmap();
    if(bitmap==NULL){
-      (new BAlert("Oh","No Image to Save","Hmm"))->Go();
+      (new BAlert(NULL,Language.get("NO_IMAGE_TO_SAVE"),Language.get("OK")))->Go();
    }
    BBitmapStream stream(bitmap);
    
    // If the id is no longer valid or the translator fails for any other
    // reason, catch it here
    status_t err = roster->Translate(*id, &stream, NULL, &file, format);
-   if(err == B_NO_TRANSLATOR){ (new BAlert("","No Translator found","What"))->Go();}
-   if(err == B_NOT_INITIALIZED){ (new BAlert("","Not initialiszed!!","Ouch"))->Go();}
-   if(err == B_BAD_VALUE){ (new BAlert("","I/O error","Not good"))->Go();}
+   if(err == B_NO_TRANSLATOR){ (new BAlert("",Language.get("NO_TRANS_FOUND"),Language.get("BUMMBER")))->Go();}
+   if(err == B_NOT_INITIALIZED){ (new BAlert("",Language.get("NOT_INITALIZED"),Language.get("")))->Go();}
+   if(err == B_BAD_VALUE){ (new BAlert("",Language.get("IO_ERROR"),Language.get("")))->Go();}
 
    // Reclaim the ownership of the bitmap, otherwise it would be deleted
    // when stream passes out of scope
@@ -154,13 +219,56 @@ void ImageShowView::SaveImage(BMessage *message){
 
    BNode fileNode(&bdir,name);
    BNodeInfo fNodeInfo(&fileNode);
-   //WE REALY NEED TO FIX THIS SO IT USES THE CORRECT MIME TYPE
-   // "image" is good enough but we can do better than that
-   fNodeInfo.SetType("image");
-   // Nead to do something so Tracker knows what this is
-   //file.WriteAttr("image/png");
-   
+      
+   #if (B_BEOS_VERSION <= B_BEOS_VERSION_4_5) || (__POWERPC__  && (B_BEOS_VERSION <= B_BEOS_VERSION_4_5))
+    SetFileType(&file, *id, format); 
+    printf("Useing Old MimeType Gess...\n");
+   #else
+    BMimeType result;
+    BEntry ent(&bdir,name);
+    entry_ref fref;
+    ent.GetRef(&fref);
+    BMimeType::GuessMimeType(&fref,&result);
+    BNodeInfo ninfo(&file); 
+    ninfo.SetType(result.Type()); 
+   #endif
 }
+
+/*******************************************************
+*   
+*******************************************************/
+#if (B_BEOS_VERSION <= B_BEOS_VERSION_4_5) || (__POWERPC__  && (B_BEOS_VERSION <= B_BEOS_VERSION_4_5))
+status_t ImageShowView::SetFileType(BFile * file, translator_id translator, uint32 type){ 
+   const translation_format *formats; 
+   int32 count;
+   BString mime("image"); //defalut
+   BTranslatorRoster *rost = BTranslatorRoster::Default();
+   status_t err = rost->GetOutputFormats(translator, &formats, &count); 
+   switch(err){
+   case B_NO_TRANSLATOR:
+      //printf("Translator (%i) is a bad ID\n",(int)translator);
+      break;
+   case B_NOT_INITIALIZED:
+      //printf("Internal Translator Kit error\n");
+      break;      
+   case B_BAD_VALUE:
+      //printf("NUll Peramiters error\n");
+      break;
+   case B_OK:
+      for (int ix=0; ix<count; ix++) { 
+         if (formats[ix].type == type) { 
+            mime.SetTo(formats[ix].MIME);
+            break; 
+         } 
+      } 
+      break;
+   }
+   printf("Seting mime type to %s\n",mime.String());
+   /* use BNodeInfo to set the file type */ 
+   BNodeInfo ninfo(file); 
+   return ninfo.SetType(mime.String()); 
+} 
+#endif
 
 /*******************************************************
 *   A pass through methoud so the window can grab
@@ -176,16 +284,20 @@ BMessage* ImageShowView::GetSplitPaneState(){
 *******************************************************/
 int32 ImageShowView::ShowSlidRunner(){
   // printf("Entering Runner\n");
+  db.SendMessage("Entering SSRunner");
    while(true){
       //printf("Snoozeing\n");
-      snooze(1000000*2);
       //NEXT_IMAGE:
       //PREV_IMAGE:
       Window()->Lock();
       selectPanel->MessageReceived(new BMessage(NEXT_IMAGE));
       Window()->Unlock();
+      bigtime_t time = 1000000;
+      time *= sec;
+      snooze(time);
    }
-   return 0;
+   db.SendMessage("Exiting SSRunner");
+   return B_OK;
 }
 
 /*******************************************************
@@ -197,7 +309,9 @@ int32 ImageShowView::ShowSlidRunner(){
 void ImageShowView::MessageReceived(BMessage *msg){
    BPath path;
    char type[B_MIME_TYPE_LENGTH];
+   Looper()->Lock();
    path = imgPanel->GetPath();
+   Looper()->Unlock();
    BNode nod;
    BNodeInfo NInfo;
    BRect rec;
@@ -209,18 +323,102 @@ void ImageShowView::MessageReceived(BMessage *msg){
    BPath TrashPath;
    rgb_color *c = NULL;
    ssize_t s;
-   
+   BDirectory dir;
+   BMessage *m;
+   entry_ref eref;
+   const char *pathname[2]={0,0};
+   BPath bookpath;
+     
    switch(msg->what){
+   case MAKE_LIST_LIST:
+      //Window()->Lock();
+      selectPanel->MessageReceived(msg);
+      Directory->SetText("User Defined List");
+      //Window()->Unlock();
+      break;
+   case UNDO:
+      imgPanel->MessageReceived(msg);
+      break;
+   case SLIDE_SPEED:
+      if(msg->FindInt32("ShowSlideSpeed",&answer) == B_OK){
+         sec = answer;
+      }
+      break;
+   case NULL_IMAGE:
+      ValidImage->MessageReceived(msg);
+      break;
+   case CHANGE_LANGUAGE:
+      Bb->SetLabel(Language.get("SELECT_FILE_FOLDER"));  
+      break;
+   case TRACKER_HERE:
+      tmpS.SetTo(selectPanel->GetPath().Path());
+      pathname[0]= tmpS.String();      
+      be_roster->Launch(MIME_TYPE_DIR, 1, (char**)&pathname);
+      break;
+   case TRACKER_THERE:
+      tmpS.SetTo(selectPanel->GetPath().Path());
+      tmpS.Append("/");
+      tmpS.Append(selectPanel->GetSelected());
+      pathname[0]= tmpS.String();      
+      be_roster->Launch(MIME_TYPE_DIR, 1, (char**)&pathname);
+      break;
+   case WORKING:
+   case FINISHED:
+      Progress->MessageReceived(msg);
+      break;
+   case ADD_BOOKMARK:
+      name.SetTo(this->path.Path());
+      this->path.Append(selectPanel->GetSelected().String(),true);
+   case ADD_BOOKMARK_CURRENT:
+      tmpS.SetTo(AppPath.Path());
+      tmpS.Append("/Bookmarks/");
+      if(bookpath.SetTo(tmpS.String()) != B_OK){
+         (new BAlert(NULL,Language.get("MAKE_BM_DIR"),Language.get("OK")))->Go();
+         dir.SetTo(AppPath.Path());
+         dir.CreateDirectory("Bookmarks",NULL);
+      }
+      tmpS.Append(this->path.Leaf());
+      if(dir.CreateSymLink(tmpS.String(),this->path.Path(),NULL) == B_OK){
+         m = new BMessage(GO_TO_BOOKMARK);
+         m->AddFlat("bmpath",&(this->path));
+         ((ImageShowWindow*)Window())->AddBookmarkItem(new BMenuItem(this->path.Leaf(), m, 0, 0));
+      }else{
+         (new BAlert(NULL,Language.get("COULD_NOT_ADD_BM"),Language.get("OK")))->Go();
+      }
+      if(msg->what == ADD_BOOKMARK){ this->path.SetTo(name.String()); }
+      break;
+   case SHOW_BOOKMARKS:
+      //Open a tracker at AppPath/Bookmakrs/
+      tmpS.SetTo(AppPath.Path());
+      tmpS.Append("/Bookmarks/");
+      pathname[0]= tmpS.String();      
+      be_roster->Launch(MIME_TYPE_DIR, 1, (char**)&pathname);
+      break;
+   case SHOW_TOOLBAR:
+      if(toolbar->IsHidden()){
+         toolbar->Show();
+      }
+      SP->MoveTo(0,ToolbarHeight);
+      SP->ResizeTo(Bounds().Width(),Bounds().Height()-15-ToolbarHeight);
+      break;
+   case HIDE_TOOLBAR:
+      if(!toolbar->IsHidden()){
+         toolbar->Hide();
+      }
+      SP->MoveTo(0,0);
+      SP->ResizeTo(Bounds().Width(),Bounds().Height()-15);
+      break;
    case DO_SHOWSLIDE:
       //Set up view
       // We should go full screen
-   
       resume_thread(ShowSlideThread);
       break;
    case KILL_SHOWSLIDE:
       suspend_thread(ShowSlideThread);
       break;
-   case SHOWER_COLOR:
+   case B_CUT:
+   case B_COPY:
+   case B_SELECT_ALL:
       imgPanel->MessageReceived(msg);
       break;
    case B_PASTE:
@@ -229,6 +427,8 @@ void ImageShowView::MessageReceived(BMessage *msg){
          ((ImageShowWindow*)Window())->AppColor = *c;
 
          SetViewColor(*c);
+         toolbar->SetViewColor(*c);
+         toolbar->Invalidate();
          SP->SetViewColor(*c);
          Bb->SetViewColor(*c);
          StatusBar->SetViewColor(*c);
@@ -242,7 +442,13 @@ void ImageShowView::MessageReceived(BMessage *msg){
          Invalidate();
          Window()->UpdateIfNeeded();
       }else{
+         imgPanel->MessageReceived(msg);
       }
+      break;
+   case SHOWER_COLOR:
+      Looper()->Lock();
+      imgPanel->MessageReceived(msg);
+      Looper()->Unlock();
       break;
    case SPLITPANE_STATE:
       SP->SetState(msg);
@@ -257,7 +463,16 @@ void ImageShowView::MessageReceived(BMessage *msg){
       selectPanel->MessageReceived(msg);
       Window()->Unlock();
       break;
- /*  case IMAG_SELECT:
+   case THUMB_SIZE:
+      Window()->Lock();
+      selectPanel->MessageReceived(msg);
+      Window()->Unlock();
+      break;
+   case REMOVE_DIR_THUMB:
+   case REMOVE_FILE_THUMB:
+      selectPanel->MessageReceived(msg);
+      break;
+   /*case IMAG_SELECT:
       if(!ListSelector->IsHidden()){ ListSelector->Hide(); }
       if(ImgSelector->IsHidden()){ ImgSelector->Show(); }
       break;
@@ -288,6 +503,11 @@ void ImageShowView::MessageReceived(BMessage *msg){
       imgPanel->MessageReceived(msg);
       Window()->Unlock();
       break;
+   case FILE_SET_BG_CENTER:
+   case FILE_SET_BG_SCALED:
+   case FILE_SET_BG_TILED:
+      //selectPanel->MessageReceived(msg);
+      break;
    case CHANGE_IMAGE:
       Window()->Lock();
       imgPanel->MessageReceived(msg);
@@ -297,6 +517,17 @@ void ImageShowView::MessageReceived(BMessage *msg){
       // and update the status bar.
       if(msg->FindFlat("imgpath",&path) == B_OK){
          Window()->Lock();
+         Directory->SetText(path.Path());
+         Window()->Unlock();
+         this->path = path;
+      }
+      break;
+   case REFS_CHANGE_DIR:
+     // (new BAlert(NULL,"This is not Good\nThis is a old messge and should not be here\n Please email me and tell me about it","ok"))->Go();
+      if(msg->FindFlat("imgpath",&path) == B_OK){
+         Window()->Lock();
+         //selectPanel->MakeList(path);
+         selectPanel->SetPath(path.Path());
          Directory->SetText(path.Path());
          Window()->Unlock();
       }
@@ -311,13 +542,6 @@ void ImageShowView::MessageReceived(BMessage *msg){
          ImgSize->SetText(tmpS.String());
       }
       break;
-   case REFS_CHANGE_DIR:
-      if(msg->FindFlat("imgpath",&path) == B_OK){};
-      Window()->Lock();
-      selectPanel->MakeList(path);
-      Directory->SetText(path.Path());
-      Window()->Unlock();
-      break;
    case MAX_SCREEN:
    case RESIZE_TO_IMAGE:
       //Parent()->MessageReceived(msg);
@@ -330,6 +554,8 @@ void ImageShowView::MessageReceived(BMessage *msg){
    case FIRST_IMAGE:
    case LAST_IMAGE:
    case LIST_OPTIONS:
+   case B_MOUSE_WHEEL_CHANGED:
+      //printf("passing to selection panel\n");
       Window()->Lock();
       selectPanel->MessageReceived(msg);
       Window()->Unlock();
@@ -352,25 +578,48 @@ void ImageShowView::MessageReceived(BMessage *msg){
       tmpS.Append("Type:\t\t");
       tmpS.Append(type);
       tmpS.Append("\n");
-      (new BAlert(NULL,tmpS.String(),"Ok"))->Go();
+      (new BAlert(NULL,tmpS.String(),Language.get("OK")))->Go();
       break;
    case DELETE_ENTRY:
+      printf("DELETING ENTRY - this is the good part\n");
       tmpS.SetTo(selectPanel->GetPath().Path());
       tmpS.Append("/");
       name = selectPanel->GetSelected();
       tmpS.Append(name.String());
       path.SetTo(tmpS.String());
-      tmpS.Prepend("Are you shure you want to delete the file:\n\t");
-      answer = (new BAlert("Conferm Del",
-      tmpS.String(),
-      "Cancel","Delete",NULL,B_WIDTH_AS_USUAL,B_STOP_ALERT))->Go();
-      //if(answer == 0){ }
+      tmpS.Prepend(Language.get("ARE_YOU_SURE"));
+      answer = (new BAlert(NULL,tmpS.String(),Language.get("CANCEL"),Language.get("DELETE"),NULL,B_WIDTH_AS_USUAL,B_STOP_ALERT))->Go();
       if(answer == 1){
+         printf("You have choosend to slauter this file\n");
          ent.SetTo(path.Path());
+         if(ent.InitCheck() != B_OK){
+            printf("Invalid entry\n");
+         }
          find_directory(B_TRASH_DIRECTORY,&TrashPath);
          TrashDir.SetTo(TrashPath.Path());
-         ent.MoveTo(&TrashDir,name.String());
-         
+         printf("File: %s\nTrash Dir: %s\nString %s\n",path.Path(),TrashPath.Path(),name.String());
+
+         status_t s = ent.MoveTo(&TrashDir,NULL);//name.String()
+         switch(s){
+         case B_OK:
+            printf("OK\n");
+            break;
+         case B_NO_INIT:
+            printf("init\n");
+            break;
+         case B_ENTRY_NOT_FOUND:
+            printf("not found\n");
+            break;
+         case B_FILE_EXISTS:
+            printf("exists\n");
+            break;
+         case B_BUSY:
+            printf("busy\n");
+            break;
+         default:
+           printf("Error \n");
+         }
+
          //WE WOULD LEAVE THIS IN BUT WE DO LIVE DIR WATCHING AND 
          // IT HANDLES WHEN TO REMOVE THE ITEM, SO DONT EXPLICITYLY
          // REMOVE IT HERE. LET THE LIST DO THAT
@@ -396,6 +645,9 @@ void ImageShowView::MessageReceived(BMessage *msg){
       break;
    case RUN_FILTER:
       imgPanel->MessageReceived(msg);      
+      break;
+   case SHOW_LOGO:
+      imgPanel->MessageReceived(msg);
       break;
    default:
       BView::MessageReceived(msg);

@@ -15,7 +15,10 @@
 *   @date    Sept 18 1999
 *******************************************************/
 #include "ImageShow.h"
+#include "BugOutDef.h"
 
+// Gloable Debug Out
+BugOut db("ImageShow");
 // Application's signature
 const char *APP_SIGNATURE = "application/x-vnd.Abstract-ImageShow";
 

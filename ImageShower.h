@@ -5,12 +5,13 @@
 #include <InterfaceKit.h>
 #include <TranslationUtils.h>
 #include <Path.h>
-#include "Addons/ImageFilter.h"
+//#include "Addons/ImageFilter.h"
 
 
 class ImageShower : public BView {
    public:
       ImageShower(BRect, uint32);
+      ~ImageShower();
       virtual void AllAttached();
       virtual void Draw(BRect);
       virtual void FrameResized(float,float);
@@ -27,13 +28,16 @@ class ImageShower : public BView {
 			return ((ImageShower*)obj)->Translator();
       }
       int32 Translator();
-      void RotateImgCW90();
-      void RotateImgCCW90();
-      void FlipH();
-      void FlipV();
+      static int32 DoFilterMenu(void* obj){
+         return ((ImageShower*)obj)->MakeMenu();
+      }
    private:
+      int32 MakeMenu();
       void FixUPScrollBars();
       void SetImgAsBG(uint32);
+      
+      BBitmap* resizeImg(BBitmap* Img,BRect r);
+      
       uint drawMode;
       uint OlddrawMode;
       BBitmap *img;
@@ -46,7 +50,19 @@ class ImageShower : public BView {
       BScrollBar *VSB;
       BPoint here;
       BPoint Offset;
-      ImageFilter *filters;
+//      ImageFilter *filters;
       rgb_color BGColor;
+      bool TIDOK;
+      bool DrawingBox;
+      BPoint BoxStart;
+      BPoint BoxStop;
+      BLocker *TransLock;
+      
+      BBitmap *undoimg;
+      bool undoable;
+      
+      
+      int32 flipID,mirrorID,rot_90ID,rot90ID;
+      
 };
 #endif

@@ -6,30 +6,29 @@
 
 class DirFileItem:public BListItem{
    public:
-      DirFileItem(BPath,const char *s,bool,bool);
+      DirFileItem(BPath,const char *s,bool,bool,bool isQ = false);
       ~DirFileItem();
       virtual void Update(BView*, const BFont *);
       virtual void DrawItem(BView *owner, BRect frame, bool complete = false);
       void MakeMenu(BMenu*);
       bool IsDirectory();
       char* Text();
-      void Rename();
-      void Renamed();
       void resizeImg();
+      void SetName(const char*);
+      void SetSize(int);
+      BPath GetPath();
    private:
       char *name;
       bool IsDir;
       BBitmap *Img;
-      BEntry entry;
+      //BEntry entry;
+      BPath myPath;
       bool Thumb;
       int Size;
+      bool IsQuery;
+      bool TextAtBottom;
+      int32 FontSize;
       
-      //BView *self;
-      
-      //BTextControl *rename;
-      //bool renameing;
-      //bool stoprenameing;
-      //bool doingrename;
       
 };
 #endif

@@ -1,15 +1,16 @@
-#include "Globals.h"
-#include "TranslatorSavePanel.h"
 #include <interface/Window.h>
 #include <interface/View.h>
 #include <interface/Alert.h>
 #include <interface/ScrollBar.h>
 #include <interface/Button.h>
 #include <TranslationKit.h>
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
+#include "Globals.h"
+#include "TranslatorSavePanel.h"
 
 TranslatorMenuItem::TranslatorMenuItem(const char *name, BMessage *message,
 	translator_id id, uint32 format) : BMenuItem(name, message) {
@@ -142,7 +143,7 @@ void TranslatorSavePanel::TranslatorSettings() {
 		configwindow = new BWindow(rect, "Translator Settings", B_TITLED_WINDOW_LOOK,
 			B_NORMAL_WINDOW_FEEL, B_NOT_ZOOMABLE | B_NOT_RESIZABLE);
 		BView *background = new BView(rect,"background",B_FOLLOW_ALL,0);
-		background->SetViewColor(219,219,219);
+		background->SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
 		background->AddChild(view);	
 		configwindow->AddChild(background);
 		// Just to make sure

@@ -1,0 +1,10 @@
+
+|  if you can send me the script/command line you want to 
+|  be able to use (so I can get it right :P) 
+ 
+An example (on one line): 
+ 
+query -a Image:Keywords=*$1* | xargs ~/ImageShow -fullscreen -random -delay 5 
+ 
+Later. 
+ 

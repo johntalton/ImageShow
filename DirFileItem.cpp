@@ -17,64 +17,64 @@
 #include <NodeInfo.h>
 #include <Path.h>
 #include <fs_attr.h>
-//#include <Autolock.h>
 
-//#include <stdio.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 #include "Globals.h"
 #include "DirFileItem.h"
+#include "YLanguageClass.h"
+#include "BugOutDef.h"
+
+extern BugOut db;
 
 /*******************************************************
 *   Set up the item and copy the name localy so we can
 *   hang on too it.
 *******************************************************/
-DirFileItem::DirFileItem(BPath p,const char *s,bool IsDirectory,bool ThumbView):BListItem(){
+DirFileItem::DirFileItem(BPath p,const char *s,bool IsDirectory,bool ThumbView,bool isQ):BListItem(){
    BNodeInfo node_info;
    BString Str;
    BNode node;
    char *buf=NULL;
    attr_info info;
-
    bool DoSystemIcons = true;
+   TextAtBottom = false;
+
+   IsQuery = isQ;
+   
+   myPath = p;
+   
+   FontSize = 16;
+   //printf("Adding Item %s/%s\n",p.Path(),s);
 
    Img = NULL;
-
    name = (char *) malloc(strlen(s)+1);
    strcpy(name, s);
-  
    IsDir = IsDirectory;
-
    Thumb = ThumbView;
 
-//   renameing = false;
-//   stoprenameing = false;
-//   doingrename = false;
-
-   /*
-   "GRAFX:Thumbnail";
-   "BEOS:L:STD_ICON";
-   "BEOS:M:STD_ICON";
-   "GRAFX:Width";
-   "GRAFX:Height";
-   */
-   
-   
-    if(!Thumb){
-      Size = 15;
+   if(!Thumb){
+      Size = 16; // This should be 16 or font hight .. which is the largest
       SetHeight(Size);
    }else{
       Size = 32;
+      if(TextAtBottom && Thumb){
+         Size += FontSize;
+      }
       SetHeight(Size);
    }
-   
    if(IsDir){
-      Str.SetTo(p.Path());
-      Str.Append("/");
-      Str.Append(name);
+      if(!strcmp(name,"..")){
+         p.GetParent(&p);
+         Str.SetTo(p.Path());
+      }else{
+         Str.SetTo(p.Path());
+         Str.Append("/");
+         Str.Append(name);
+      }
       node.SetTo(Str.String());
       node_info.SetTo(&node);
-      //BNodeInfo::GetTrackerIcon(&ref,Img,B_MINI_ICON);
       if(!Thumb){
          if(DoSystemIcons){
             Img = new BBitmap(BRect(0, 0, B_MINI_ICON - 1, B_MINI_ICON - 1), B_COLOR_8_BIT);
@@ -90,10 +90,7 @@ DirFileItem::DirFileItem(BPath p,const char *s,bool IsDirectory,bool ThumbView):
             Img = BTranslationUtils::GetBitmap("BigBeDir");
          }
       }
-      
    }else{
-      //BNodeInfo::GetTrackerIcon(&ref,Img,B_MINI_ICON);
-      //node_info.GetTrackerIcon(Img,B_MINI_ICON);
       Str.SetTo(p.Path());
       Str.Append("/");
       Str.Append(name);
@@ -111,11 +108,10 @@ DirFileItem::DirFileItem(BPath p,const char *s,bool IsDirectory,bool ThumbView):
          Str.Append("/");
          Str.Append(name);
          node.SetTo(Str.String());
-         if(node.GetAttrInfo("GRAFX:Thumbnail", &info) == B_OK){
+         if(node.GetAttrInfo(THUMBNAIL_ATTR, &info) == B_OK){
             //printf("this node has a thumbnail attribute\n");
             buf = new char[info.size];
-            if(info.size == node.ReadAttr("GRAFX:Thumbnail",B_MESSAGE_TYPE, 0,buf,info.size)){
-               //printf("Ah.. our atribe is here now..\n");
+            if(info.size == node.ReadAttr(THUMBNAIL_ATTR,B_MESSAGE_TYPE, 0,buf,info.size)){
                BMessage archive;
                archive.Unflatten(buf);	
                Img = (BBitmap*)instantiate_object(&archive);
@@ -131,11 +127,29 @@ DirFileItem::DirFileItem(BPath p,const char *s,bool IsDirectory,bool ThumbView):
             Img = BTranslationUtils::GetBitmapFile(Str.String());
             if(Img){
                // So there is a img but no attribut info ... lets do it then
+               BRect OrigSize = Img->Bounds();
                resizeImg();
-               
+               //printf("Makeing Attribute Ourselfs\n");
                // MAKE ATTIBUTE AND WRITE IT IF USER WANTS
-               
-               
+               /*
+              "GRAFX:Thumbnail";
+              "GRAFX:Width";
+              "GRAFX:Height";
+              */
+              if(true){ // THIS SHOUD BE A VOLUME CHECK TO SEE IF WE SUPPORT ATTRIBUTS
+                 BMessage archive;
+                 Img->Archive(&archive);
+                 ssize_t size = archive.FlattenedSize();
+                 char *buf = new char[size];
+                 archive.Flatten(buf,size);
+                 node.WriteAttr(THUMBNAIL_ATTR,B_MESSAGE_TYPE, 0, buf,size);
+                 delete buf;
+                 int32 h,w;
+                 w = OrigSize.IntegerWidth() + 1;
+                 h = OrigSize.IntegerHeight() + 1;
+                 node.WriteAttr(WIDTH_ATTR, B_INT32_TYPE, 0, (void *)&w, sizeof(int32));
+                 node.WriteAttr(HEIGHT_ATTR,B_INT32_TYPE, 0, (void *)&h, sizeof(int32));
+              }
             }
          }
          if(!Img){
@@ -150,10 +164,7 @@ DirFileItem::DirFileItem(BPath p,const char *s,bool IsDirectory,bool ThumbView):
          }
       }
    }
-  
-
    delete buf;
-
 }
 
 /*******************************************************
@@ -162,6 +173,15 @@ DirFileItem::DirFileItem(BPath p,const char *s,bool IsDirectory,bool ThumbView):
 DirFileItem::~DirFileItem() {
    free(name);
    free(Img);
+}
+
+/*******************************************************
+*   A little hack we put in so that we dont have to do
+*   a bunch of extra work for sym links.
+*******************************************************/
+void DirFileItem::SetName(const char *s) {
+   name = (char *) malloc(strlen(s)+1);
+   strcpy(name, s);
 }
 
 /*******************************************************
@@ -178,7 +198,6 @@ void DirFileItem::Update(BView *owner, const BFont *finfo){
 void DirFileItem::DrawItem(BView *owner, BRect frame, bool complete) {
    BRect b;
    owner->SetDrawingMode(B_OP_OVER);
-   
    
 /*   if(renameing){
       rename = new BTextControl(BRect(frame.left+Size+3+3,frame.top,frame.right,frame.bottom),"name",name,name,new BMessage(RENAMED));
@@ -209,104 +228,107 @@ void DirFileItem::DrawItem(BView *owner, BRect frame, bool complete) {
       owner->SetHighColor(owner->ViewColor());
       owner->FillRect(frame);
    }
-   if(Img){
-      b = frame;
-      b.bottom -= 1;
-      b.right = frame.left + Size + 5;
-      b.left = frame.left + 5 +1;
-      owner->DrawBitmap(Img,Img->Bounds(),b);
-      owner->MovePenTo(frame.left+Size+10, frame.bottom-2);
-   }else{
-      owner->MovePenTo(frame.left+5, frame.bottom-2);
-   }
    
    if(IsSelected()){
       owner->SetHighColor(190,190,190);
-      //owner->SetDrawingMode(B_OP_BLEND);//SELECT
-      //owner->FillRect(BRect(frame.left,frame.top,frame.right,frame.bottom));
-      owner->FillRect(BRect(frame.left+Size+8,frame.top,frame.right,frame.bottom));
-      //owner->SetDrawingMode(B_OP_OVER);
-      owner->SetHighColor(0,0,0);
-   }else{
-      owner->SetHighColor(0,0,0);
+      if(TextAtBottom && Thumb){
+         owner->FillRect(BRect(frame.left+Size+8-FontSize,frame.top,frame.right,frame.bottom));
+         owner->FillRect(BRect(frame.left+5,frame.bottom-FontSize+1,frame.left+Size+8-FontSize,frame.bottom));
+      }else{
+         owner->FillRect(BRect(frame.left+Size+8,frame.top,frame.right,frame.bottom));
+      }
    }
    
-   if(IsDir){
-      owner->DrawString(name);
-   }else{
-      owner->DrawString(name);
-   }
-
-
-
-/*
-   if (IsSelected() || complete) {
-//      rgb_color color;
-      if (IsSelected()) {
-         //owner->SetHighColor(190,190,190);
-         owner->SetHighColor(255,0,0);
-         owner->SetLowColor(0,255,0);
-      }else{
-         owner->SetHighColor(owner->ViewColor());
-         owner->SetLowColor(0,0,255);
-      }
-      
-      owner->FillRect(BRect(frame.left+Size+8,frame.top,frame.right,frame.bottom));
-   }
    
    if(Img){
+      
       b = frame;
       b.bottom -= 1;
+      b.left = frame.left + 5 + 1;
       b.right = frame.left + Size + 5;
-      b.left = frame.left + 5 +1;
+      
+      if(TextAtBottom && Thumb){
+         b.bottom -= FontSize;
+         b.right -= FontSize;
+      }
+      
       owner->DrawBitmap(Img,Img->Bounds(),b);
-      owner->MovePenTo(frame.left+Size+10, frame.bottom-2);
+      
+      b = frame;
+      if(TextAtBottom && Thumb){
+         b.left += 5;
+      }else{
+         b.left += Size + 10;
+      }
+      b.bottom -= 2;
+      //owner->MovePenTo(frame.left+Size+10, frame.bottom-2);
    }else{
-      owner->MovePenTo(frame.left+5, frame.bottom-2);
+      b = frame;
+      b.left += 5;
+      b.bottom -= 2;
+      //owner->MovePenTo(frame.left+5, frame.bottom-2);
    }
    
-   if (IsEnabled()) {
-      owner->SetLowColor(255,0,0);
-      owner->SetHighColor(0,0,0);
-   }else{
-     owner->SetHighColor(255,0,0);
-     owner->SetLowColor(255,0,0);
-   }
+   owner->MovePenTo(b.left, b.bottom);
    
-   
-   
+   owner->SetHighColor(0,0,0);
    if(IsDir){
       owner->DrawString(name);
    }else{
       owner->DrawString(name);
    }
-   
-   //self = owner;
-*/      
 }
 
 /*******************************************************
 *   Make a menu based on what ports we have
 *******************************************************/
 void DirFileItem::MakeMenu(BMenu* menu){
-  // BMenuItem* item;
+   printf("Makeing menu for item %s/%s\n",myPath.Path(),name);
    if(IsDir){
-      menu->AddItem(new BMenuItem("Directory Menu",NULL));
+      //menu->AddItem(new BMenuItem("Directory Menu",NULL));
+      //menu->AddItem(new BSeparatorItem());
+      menu->AddItem(new BMenuItem(Language.get("RENAME"),new BMessage(RENAME_ENTRY)));
+      menu->AddItem(new BMenuItem(Language.get("DELETE"),new BMessage(DELETE_ENTRY)));
+      menu->AddItem(new BMenuItem(Language.get("MOVE"),new BMessage(MOVE_ENTRY)));
+      menu->AddItem(new BMenuItem(Language.get("REMOVE_THUMBS"),new BMessage(REMOVE_DIR_THUMB)));
+      menu->AddItem(new BMenuItem(Language.get("ADD_BOOKMARK"),new BMessage(ADD_BOOKMARK)));
       menu->AddItem(new BSeparatorItem());
-      menu->AddItem(new BMenuItem("Rename",new BMessage(RENAME_ENTRY)));
-      menu->AddItem(new BMenuItem("Delete",new BMessage(DELETE_ENTRY)));
-      menu->AddItem(new BMenuItem("Move",new BMessage(MOVE_ENTRY)));
+      menu->AddItem(new BMenuItem(Language.get("LAUNCH_TRACKER"),new BMessage(TRACKER_THERE)));
+      if(IsQuery){
+         menu->AddItem(new BMenuItem(Language.get("EDIT_QUERY"),new BMessage(EDIT_QUERY)));
+      }
       menu->AddItem(new BSeparatorItem());
-      menu->AddItem(new BMenuItem("Get Info",new BMessage(GET_IMG_INFO)));
+      menu->AddItem(new BMenuItem(Language.get("GET_INFO"),new BMessage(GET_FILE_INFO)));
+      
    }else{
-      menu->AddItem(new BMenuItem("File Menu",NULL));
+     // menu->AddItem(new BMenuItem("File Menu",NULL));
+     // menu->AddItem(new BSeparatorItem());
+      menu->AddItem(new BMenuItem(Language.get("RENAME"),new BMessage(RENAME_ENTRY)));
+      menu->AddItem(new BMenuItem(Language.get("DELETE"),new BMessage(DELETE_ENTRY)));
+      menu->AddItem(new BMenuItem(Language.get("MOVE"),new BMessage(MOVE_ENTRY)));
+      menu->AddItem(new BMenuItem(Language.get("REMOVE_THUMBS"),new BMessage(REMOVE_FILE_THUMB)));
+           
+      BMenu *submenu = new BMenu(Language.get("SET_AS_BG"));
+      submenu->AddItem(new BMenuItem(Language.get("CENTERED"),new BMessage(FILE_SET_BG_CENTER)));
+      submenu->AddItem(new BMenuItem(Language.get("SCALED"),new BMessage(FILE_SET_BG_SCALED)));
+      submenu->AddItem(new BMenuItem(Language.get("TILED"),new BMessage(FILE_SET_BG_TILED)));
+      menu->AddItem(submenu);
       menu->AddItem(new BSeparatorItem());
-      menu->AddItem(new BMenuItem("Rename",new BMessage(RENAME_ENTRY)));
-      menu->AddItem(new BMenuItem("Delete",new BMessage(DELETE_ENTRY)));
-      menu->AddItem(new BMenuItem("Move",new BMessage(MOVE_ENTRY)));
+      menu->AddItem(new BMenuItem(Language.get("LAUNCH_TRACKER"),new BMessage(TRACKER_HERE)));
       menu->AddItem(new BSeparatorItem());
-      menu->AddItem(new BMenuItem("Get Info",new BMessage(GET_FILE_INFO)));
+      menu->AddItem(new BMenuItem(Language.get("GET_INFO"),new BMessage(GET_FILE_INFO)));
    }
+}
+
+/*******************************************************
+*   Set a custom size for the Thumb View
+*******************************************************/
+void DirFileItem::SetSize(int s){
+   Size = s;
+   if(TextAtBottom && Thumb){
+      Size += FontSize;
+   }
+   SetHeight(Size);
 }
 
 /*******************************************************
@@ -316,56 +338,26 @@ bool DirFileItem::IsDirectory(){
    return IsDir;
 }
 
-
 /*******************************************************
-*   Ask the Item if it is a directory or not
+*   Get the text that is this item
 *******************************************************/
 char* DirFileItem::Text(){
    return name;
-}
-
-
-/*******************************************************
-*   Ask the Item if it is a directory or not
-*******************************************************/
-void DirFileItem::Rename(){
-//   renameing = true;
-}
-
-/*******************************************************
-*   Ask the Item if it is a directory or not
-*******************************************************/
-void DirFileItem::Renamed(){
-   BString new_name;
-//   new_name.SetTo(rename->Text());
-   
-   //Get the entry for this  path/name and make it path/new_name
-   name = (char *) malloc(strlen(new_name.String())+1);
-   strcpy(name, new_name.String());
-   
-//   stoprenameing = true;
-//   self->Invalidate();
-}
-
-
-float min(float a,float b){
-   if(a < b) return a;
-   return b;
-}
-float max(float a,float b){
-   if(a > b) return a;
-   return b;
 }
 
 /*******************************************************
 *   Resizes the image so its nice and small for thumbs
 *******************************************************/
 void DirFileItem::resizeImg(){
-   BBitmap *new_img = new BBitmap(BRect(0,0,Size,Size),B_RGB32,true);
+   int ThumbSize = 64;
+   BBitmap *new_img = new BBitmap(BRect(0,0,ThumbSize,ThumbSize),B_RGB32,true);
    if(!new_img->IsValid()){
-      (new BAlert(NULL,"Image is not Valid - thats not good!","Oh"))->Go();
+      //This could potentaly cause a problem as we are acutaly inside of a 
+      // thread. If we post 2 alerts the app will most likely lock
+      (new BAlert(NULL,Language.get("RESIZE_ERROR"),Language.get("OK")))->Go();
+      return;
    }
-   BView  *blah = new BView(BRect(0,0,Size,Size),"drawer",B_FOLLOW_NONE,B_WILL_DRAW);
+   BView  *blah = new BView(BRect(0,0,ThumbSize,ThumbSize),"drawer",B_FOLLOW_NONE,B_WILL_DRAW);
    
    new_img->AddChild(blah);
    new_img->Lock();
@@ -382,8 +374,16 @@ void DirFileItem::resizeImg(){
    delete Img;
    Img = new BBitmap(new_img);
    delete new_img;
-   
 }
+
+/*******************************************************
+*   Gets the full path to this entry
+*******************************************************/
+BPath DirFileItem::GetPath(){
+   return myPath;
+}
+
+
 
 
 

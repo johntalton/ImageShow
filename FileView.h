@@ -1,25 +1,28 @@
-#ifndef _FILE_LIST_VIEW_H
-#define _FILE_LIST_VIEW_H
+#ifndef _FILE_VIEW_H
+#define _FILE_VIEW_H
 
 #include <Application.h>
 #include <AppKit.h>
 #include <InterfaceKit.h>
 #include <Path.h>
 
-bool SetItemSize(BListItem*, void*);
+#include "ListViewer.h"
 
-class FileListView : public BListView {
+//bool SetItemSize(BListItem*, void*);
+
+class FileView : public CColumnListView{
    public:
-      FileListView(BRect);
-      ~FileListView();
-      virtual void MouseDown(BPoint);
-      virtual void KeyDown(const char *, int32);
+      FileView(BRect,uint32 mode);
+      ~FileView();
+      //virtual void MouseDown(BPoint);
+      //virtual void KeyDown(const char *, int32);
       BPath GetPath();
       BString GetSelected();
       void SetPath(const char*);
       virtual void MessageReceived(BMessage*);
-      
-   private:
+private:
+   status_t AddEntry(BEntry);
+/*   private:
       static int32 MakeList_Hook(void* obj){
          return ((FileListView*)obj)->MakeThatList();
       }
@@ -35,23 +38,15 @@ class FileListView : public BListView {
       int32 MakeThatList();
       int32 MakeThatListQuery();
       int32 MakeThatListList();
-      status_t AddEntry(BEntry);
+   
 
       void MakeMenu(BMenu*);
       void RemoveDirAttr(BString,BPath);
       bool IsEntryQueryFile(BEntry);
       BString GetQryStr(BEntry);
       status_t GetQryVol(BVolume*,BEntry,int32);
-      status_t MatchArchivedVolume(BVolume*, const BMessage *,int32);
+      status_t MatchArchivedVolume(BVolume*, const BMessage *,int32);*/
 private:    
-      BPath OurPath;
-      BPath Path;
-      int OldSelection;
-      bool filterImg;
-      bool DoThumb;
-      thread_id MakeListThread;
-      bool Tree;
-      int32 ThumbSize;
-      BList *pathlist;
+
 };
 #endif
